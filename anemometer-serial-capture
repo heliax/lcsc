@@ -1,0 +1,61 @@
+#!/usr/bin/python
+import serial
+import time
+from datetime import datetime
+import os
+import daemon
+
+def logger(message):
+    if os.path.isfile(debugFile):
+        dateTimeObj = datetime.now()
+        timestampStr = dateTimeObj.strftime("%d-%b-%Y (%H:%M:%S.%f)")
+        message = "%s: %s\n" % (timestampStr, message)
+        fh = open(logFile, 'a')
+        fh.write(message)
+        fh.close()
+
+def getSerial():
+    line = port.readline()
+    return line
+
+def procIIMWV(nmea):
+    a = nmea.split(',')
+    winddir = a[1]
+    windspeed = a[3]
+    return(winddir, windspeed)
+
+# $IIMWV,179.0,R,000.0,N,A*32
+
+def writeData(windspeed, winddir, line):
+    windData = "%s,%s,%s" % (windspeed,winddir,line)
+    df = open(dataFile, 'w')
+    df.write(windData)
+    df.close()
+
+debugFile = '/home/pi/ramdisk/DEBUG'
+logFile = '/home/pi/ramdisk/anemometer-serial.log'
+dataFile = '/home/pi/ramdisk/winddata'
+
+line= ""
+port = serial.Serial("/dev/ttyS0", baudrate=4800, timeout=3.0)
+
+def main_program():
+    try:
+        logger('Starting serial capture')
+        port = serial.Serial("/dev/ttyS0", baudrate=4800, timeout=3.0)
+        while True: 
+            line = ""
+            logger("Listening for serial data")
+            line = getSerial()
+            logger("Captured serial data line: %s" % (line))
+            if 'IIMWV' in line:
+                winddir, windspeed = procIIMWV(line)
+                logger("Windspeed: %s Wind Direction: %s Raw: %s" % (windspeed, winddir, line))
+                writeData(windspeed, winddir, line)
+    except Exception as e:
+        print(e)
+        logger(e)
+
+with daemon.DaemonContext():
+    main_program()
+

@@ -1,0 +1,39 @@
+#!/usr/bin/python
+import requests
+import yaml
+
+def getWindData():
+    wx = open(windData, 'r')
+    line = wx.readline()
+    wx.close()
+    a = line.split(',')
+    windspeed = a[0]
+    winddir = a[1]
+    return windspeed, winddir
+
+def getBaroData():
+    baro = open(baroData, 'r')
+    line = baro.readline()
+    baro.close()
+    a = line.split(',')
+    temperature = a[0]
+    pressure = a[1]
+    return temperature, pressure
+
+config = yaml.safe_load(open("/etc/weather/config.yml"))
+
+windData = '/home/pi/ramdisk/winddata'
+baroData = '/home/pi/ramdisk/barometricdata'
+api_key = config['windy']['apikey']
+
+windspeed, winddir = getWindData()
+pressure, temperature = getBaroData()
+
+windspeedms = float(windspeed) * 0.514444
+url = 'https://stations.windy.com/pws/update/%s?winddir=%s&wind=%s&mbar=%s' % (api_key, winddir, windspeedms, pressure)
+print url
+
+response = requests.get(url, verify=False)
+print response.status_code
+print response.text
+

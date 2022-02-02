@@ -1,0 +1,92 @@
+#!/usr/bin/python
+import requests
+import hashlib
+import time
+from datetime import datetime
+import yaml
+
+def generate_salt():
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghojklmnopqrstuvwxyz23456789"
+    from os import urandom
+    return "".join(chars[ord(c) % len(chars)] for c in urandom(10))
+
+def getWindData():
+    wx = open(windData, 'r')
+    line = wx.readline()
+    wx.close()
+    a = line.split(',')
+    windspeed = a[0]
+    try:
+        winddir = a[1].split('.')[0]
+    except:
+        errorHandle("Failure to get windata: Line: %s" % (line))
+    return windspeed, winddir
+
+def getBaroData():
+    baro = open(baroData, 'r')
+    line = baro.readline()
+    baro.close()
+    a = line.split(',')
+    temperature = a[0]
+    pressure = a[1]
+    return temperature, pressure
+
+def getMinuteData():
+    wx = open(minuteData, 'r')
+    wspeed = wx.readline()
+    wdir = wx.readline()
+    wx.close()
+    a = wspeed.split(',')
+    a = list(map(float, a))
+    windMax = "%.1f" % (max(a))
+    alen = len(a)
+    asum = sum(a)
+    windAverage = "%.1f" % (asum / alen)
+
+    a = wdir.split(',')
+    a = list(map(float, a))
+    alen = len(a)
+    asum = sum(a)
+    windDirAverage = int(asum / alen)    
+    return windMax, windAverage, windDirAverage
+
+def errorHandle(logdata):
+    ct = datetime.datetime.now()
+    log = open(logfile, 'a')
+    log.write("%s Windguru: %s\n" (ct, logdata))
+    close(log)
+    sys.exit(1)
+
+config = yaml.safe_load(open("/etc/weather/config.yml"))
+
+windData = '/home/pi/ramdisk/winddata'
+baroData = '/home/pi/ramdisk/barometricdata'
+minuteData = '/home/pi/ramdisk/minuteData'
+logfile = '/home/pi/ramdisk/error-log'
+windspeed, winddir = getWindData()
+pressure, temperature = getBaroData()
+windMax, windAverage, windDirAverage = getMinuteData()
+windspeedms = float(windspeed) * 0.514444
+
+station = config['windguru']['station']
+apipw = config['windguru']['apipw']
+salt = generate_salt()
+interval = '60' 
+hashstring = hashlib.md5(salt + station + apipw).hexdigest()
+
+url = "http://www.windguru.cz/upload/api.php?uid=%s&salt=%s&hash=%s&wind_avg=%s&wind_max=%s&wind_direction=%s&interval=%s" % (station, salt, hashstring, windAverage, windMax, windDirAverage, interval)
+
+
+print url
+
+response = requests.get(url)
+print response.status_code
+print response.text
+
+dateTimeObj = datetime.now()
+timestamp = dateTimeObj.strftime("%d-%b-%Y %H:%M:%S")
+windguru = open('/home/pi/ramdisk/windguru.log', 'a')
+windguru.write("%s %s\n" % (timestamp, response.status_code))
+windguru.close()
+
+
